@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Free Thrift & Hot Wheels Finder</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background:#111;
+  color:white;
+  text-align:center;
+  padding:40px;
+}
+
+h1 {
+  font-size:36px;
+}
+
+#mainBtn {
+  font-size:28px;
+  padding:22px 40px;
+  background:crimson;
+  border:none;
+  border-radius:16px;
+  color:white;
+  cursor:pointer;
+}
+
+#status {
+  margin-top:20px;
+}
+
+#results {
+  max-width:700px;
+  margin:30px auto;
+}
+
+.store {
+  background:#222;
+  padding:16px;
+  margin:12px;
+  border-radius:12px;
+  text-align:left;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🛒 Thrift & Hot Wheels Finder (FREE)</h1>
+
+<button id="mainBtn">FIND STORES NEAR ME</button>
+
+<div id="status"></div>
+<div id="results"></div>
+
+<script>
+document.getElementById("mainBtn").onclick = () => {
+  document.getElementById("status").innerText =
+    "📍 Getting your location...";
+
+  navigator.geolocation.getCurrentPosition(
+    pos => searchPlaces(pos.coords.latitude, pos.coords.longitude),
+    () => alert("Location permission denied.")
+  );
+};
+
+async function searchPlaces(lat, lon) {
+  document.getElementById("status").innerText =
+    "🔍 Searching nearby stores...";
+
+  // Overpass API query
+  const query = `
+[out:json][timeout:25];
+(
+  node["shop"~"thrift|second_hand|charity"](around:8000,${lat},${lon});
+  way["shop"~"thrift|second_hand|charity"](around:8000,${lat},${lon});
+
+  node["shop"="toy"](around:8000,${lat},${lon});
+  way["shop"="toy"](around:8000,${lat},${lon});
+
+  node["name"~"Hot Wheels",i](around:8000,${lat},${lon});
+  way["name"~"Hot Wheels",i](around:8000,${lat},${lon});
+);
+out center tags;
+`;
+
+  const url =
+    "https://overpass-api.de/api/interpreter?data=" +
+    encodeURIComponent(query);
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  showResults(data.elements, lat, lon);
+}
+
+function milesBetween(lat1, lon1, lat2, lon2) {
+  const R = 3958.8;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLon = (lon2-lon1) * Math.PI/180;
+
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180) *
+    Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLon/2)**2;
+
+  return (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(2);
+}
+
+function showResults(stores, myLat, myLon) {
+  const div = document.getElementById("results");
+  div.innerHTML = "";
+
+  if (!stores || !stores.length) {
+    div.innerHTML = "<p>No stores found nearby.</p>";
+    return;
+  }
+
+  stores.forEach(s => {
+    const lat = s.lat || s.center.lat;
+    const lon = s.lon || s.center.lon;
+
+    const distance = milesBetween(myLat, myLon, lat, lon);
+
+    const name = s.tags.name || "Unnamed Store";
+    const type = s.tags.shop || "store";
+
+    const el = document.createElement("div");
+    el.className = "store";
+
+    el.innerHTML = `
+      <h3>${name}</h3>
+      <p>Type: ${type}</p>
+      <p>${distance} miles away</p>
+    `;
+
+    div.appendChild(el);
+  });
+}
+</script>
+
+</body>
+</html>
